@@ -77,21 +77,45 @@ class DeepLClient:
         self.src  = _norm_lang(source_lang, for_target=False)
 
     def translate(self, text: str) -> str:
+        # 1) DeepL 主路
         try:
             data = {
                 "auth_key": self.key,
                 "text": text,
-                "target_lang": self.lang,
-                "source_lang": self.src,
+                "target_lang": self.lang,  # e.g. ZH / EN-US
+                "source_lang": self.src,  # e.g. EN
                 "split_sentences": "0",
                 "preserve_formatting": "1"
             }
-            r = requests.post(f"{self.base}/v2/translate", data=data, timeout=15)
+            r = requests.post(f"{self.base}/v2/translate", data=data, timeout=12)
             r.raise_for_status()
             js = r.json()
-            return js["translations"][0]["text"]
-        except Exception as e:
-            return f"[DeepL error] {e}"
+            out = js["translations"][0]["text"]
+            if isinstance(out, str) and out.strip():
+                return out
+        except Exception:
+            pass
+
+        # 2) 兜底：MyMemory
+        try:
+            src = (self.src or "EN").split("-")[0].lower()
+            tgt = (self.lang or "ZH").split("-")[0].lower()
+            tgt = "zh-CN" if tgt == "zh" else tgt
+            r = requests.get(
+                "https://api.mymemory.translated.net/get",
+                params={"q": text, "langpair": f"{src}|{tgt}"},
+                timeout=8
+            )
+            js = r.json()
+            out = (js.get("responseData") or {}).get("translatedText", "")
+            if isinstance(out, str) and out.strip():
+                return out
+        except Exception:
+            pass
+
+        # 3) 最终兜底：直接显示原文并打标，避免 UI 下方空白
+        return f"[no-translation] {text}"
+
 
 class AsrEngine(threading.Thread):
     """
