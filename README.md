@@ -1,5 +1,5 @@
 # GuiLiveSubs (Windows / macOS)
-实时字幕 GUI：Whisper（faster-whisper）+ DeepL，悬浮窗滚动显示（上英下译），可选保存 TXT/SRT。
+Real-time Caption GUI: Whisper (faster-whisper) + DeepL, floating window with scrolling display (English top, translation bottom), optional saving to TXT/SRT.
 
 ## 1) install（conda）
 ```bash
@@ -26,7 +26,7 @@ python app/main.py
  Toggle Overlay → Show/Hide floating subtitles.
 
 ## 3) options
-- Device: CPU/auto/cuda（Windows 如需 GPU，请先配好 CUDA 12.x + cuDNN 9，再把 Device 设为 cuda）
-- Whisper: base.en（默认），也可以 tiny.en（更快）或 small.en（更准）
-- 滚动显示：可调最大行数与字体大小
-- 保存：勾选 TXT/SRT 并选择文件路径
+- Device: CPU/auto/cuda (Windows users requiring GPU must first install CUDA 12.x + cuDNN 9, then set Device to cuda)
+- Whisper: base.en (default), or tiny.en (faster) or small.en (more accurate)
+- Scrolling display: Adjustable maximum lines and font size
+- Save: Check TXT/SRT and select file path
