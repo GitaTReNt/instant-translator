@@ -1,0 +1,5 @@
+PyQt6>=6.6
+numpy>=1.24
+sounddevice>=0.4.6
+requests>=2.31
+faster-whisper>=1.0.0
