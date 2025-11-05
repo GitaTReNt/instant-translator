@@ -1,4 +1,4 @@
-# GuiLiveSubs (Windows / macOS)
+# LiveSubs (Windows / macOS)
 Real-time Caption GUI: Whisper (faster-whisper) + DeepL, floating window with scrolling display (English top, translation bottom), optional saving to TXT/SRT.
 
 ## 1) install（conda）
