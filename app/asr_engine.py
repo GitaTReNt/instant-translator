@@ -133,21 +133,89 @@ class AsrEngine(threading.Thread):
                         self._handle_chunk(done, start_mono, end_mono)
 
     def _handle_chunk(self, pcm16: bytes, start_mono: float, end_mono: float):
+        """
+        将一个 VAD 切出来的 chunk 做成多条“词组/小句”字幕：
+        - 如果有 word_timestamps，就按词的时间做分组，并精确到每组的起止时间
+        - 没有的话，退化为按 segment 的起止时间
+        每条小句都会单独送 DeepL 翻译，并进入 UI/SRT。
+        """
+        import math
+
         audio = (np.frombuffer(pcm16, dtype=np.int16).astype(np.float32) / 32768.0)
         segments, info = self.model.transcribe(
             audio, language="en", beam_size=1, vad_filter=False,
-            condition_on_previous_text=False, word_timestamps=False
+            condition_on_previous_text=False, word_timestamps=True
         )
-        src = " ".join(s.text.strip() for s in segments).strip()
-        if not src:
-            return
-        tgt = self.translator.translate(src)
-        self.output_q.put({
-            "src": src,
-            "tgt": tgt,
-            "start": start_mono,
-            "end": end_mono
-        })
+
+        # 分组阈值：同一小句最多多少词、相邻词间最大间隔（秒）、句末标点断句
+        MAX_WORDS = 8
+        MAX_GAP_S = 0.8
+        PUNC_BREAKS = {".", "!", "?", ",", ";", ":", "。", "！", "？", "，", "；", "："}
+
+        def flush_group(group):
+            if not group:
+                return
+            # 组文本与时间（相对 chunk 开头），再换算成绝对单调时钟
+            text = "".join(w.word for w in group).strip()
+            text = " ".join(text.split())  # 规整空格
+            gstart = group[0].start or 0.0
+            gend = group[-1].end or gstart
+            abs_start = start_mono + float(gstart)
+            abs_end = start_mono + float(gend)
+
+            if text:
+                tgt = self.translator.translate(text)
+                self.output_q.put({
+                    "src": text,
+                    "tgt": tgt,
+                    "start": abs_start,
+                    "end": abs_end
+                })
+            group.clear()
+
+        used_word_level = False
+        for s in segments:
+            words = getattr(s, "words", None) or []
+            if words:
+                used_word_level = True
+                group = []
+                prev_end = None
+                for w in words:
+                    token = (w.word or "").strip()
+                    gap_ok = (prev_end is None) or ((w.start or 0.0) - prev_end <= MAX_GAP_S)
+                    group.append(w)
+                    # 断句条件：到上限、遇到句末标点、词间隔太大
+                    end_with_punc = token in PUNC_BREAKS or (token and token[-1] in PUNC_BREAKS)
+                    reach_limit = len(group) >= MAX_WORDS
+                    gap_break = (prev_end is not None) and ((w.start or 0.0) - prev_end > MAX_GAP_S)
+                    if end_with_punc or reach_limit or gap_break:
+                        flush_group(group)
+                    prev_end = w.end or w.start or prev_end
+                # 收尾
+                flush_group(group)
+
+        # 如果模型/包不返回逐词时间，则退化到按 segment 输出（仍使用准确的 segment 起止）
+        if not used_word_level:
+            merged = []
+            for s in segments:
+                txt = (s.text or "").strip()
+                if not txt:
+                    continue
+                seg_start = float(getattr(s, "start", 0.0) or 0.0)
+                seg_end = float(getattr(s, "end", seg_start))
+                abs_start = start_mono + seg_start
+                abs_end = start_mono + seg_end
+                merged.append((txt, abs_start, abs_end))
+
+            # 若所有 segment 很短，也可以合并输出；这里直接逐段发送：
+            for txt, abs_start, abs_end in merged:
+                tgt = self.translator.translate(txt)
+                self.output_q.put({
+                    "src": txt,
+                    "tgt": tgt,
+                    "start": abs_start,
+                    "end": abs_end
+                })
 
     def run(self):
         t = threading.Thread(target=self._audio_loop, daemon=True)
