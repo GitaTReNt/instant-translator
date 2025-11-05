@@ -18,7 +18,7 @@ SETTINGS_PATH = os.path.join(app_support_dir(), "settings.json")
 
 DEFAULTS = {
     "deepl_key": "",
-    "target_lang": "zh",
+    "target_lang": "ZH",
     "show_source": True,
     "model_name": "base.en",
     "device": "cpu",

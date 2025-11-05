@@ -56,11 +56,25 @@ class EnergyVadChunker:
             return data
         return None
 
+def _norm_lang(code: str, *, for_target: bool = True) -> str:
+    if not code:
+        return "ZH" if for_target else "EN"
+    c = code.strip().upper()
+    # 常见别名归一
+    aliases = {
+        "CN": "ZH", "ZH-CN": "ZH", "ZH-HANS": "ZH", "ZH-HANT": "ZH",
+        "EN": "EN-US"  # DeepL 目标语言不接受裸 EN，给个更常见的缺省
+    }
+    return aliases.get(c, c)
+
+
 class DeepLClient:
-    def __init__(self, auth_key: str, api_base: str = "https://api.deepl.com", target_lang: str = "zh"):
+    def __init__(self, auth_key: str, api_base: str = "https://api.deepl.com",
+                 target_lang: str = "ZH", source_lang: str = "EN"):
         self.key = auth_key
         self.base = api_base.rstrip("/")
-        self.lang = target_lang
+        self.lang = _norm_lang(target_lang, for_target=True)
+        self.src  = _norm_lang(source_lang, for_target=False)
 
     def translate(self, text: str) -> str:
         try:
@@ -68,9 +82,9 @@ class DeepLClient:
                 "auth_key": self.key,
                 "text": text,
                 "target_lang": self.lang,
+                "source_lang": self.src,
                 "split_sentences": "0",
-                "preserve_formatting": "1",
-                "model_type": "latency_optimized"
+                "preserve_formatting": "1"
             }
             r = requests.post(f"{self.base}/v2/translate", data=data, timeout=15)
             r.raise_for_status()
@@ -101,7 +115,11 @@ class AsrEngine(threading.Thread):
         self.model = WhisperModel(model_name, device=device, compute_type=compute_type)
         # warm up
         list(self.model.transcribe(np.zeros(self.sr, dtype=np.float32), beam_size=1, language="en"))
-        self.translator = DeepLClient(deepl_key, api_base=api_base, target_lang=target_lang)
+        self.translator = DeepLClient(
+            deepl_key, api_base=api_base,
+            target_lang=target_lang,
+            source_lang="EN"
+        )
         self.session_start = time.monotonic()
 
     def stop(self):
