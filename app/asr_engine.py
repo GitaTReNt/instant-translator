@@ -149,7 +149,7 @@ class AsrEngine(threading.Thread):
 
         # 分组阈值：同一小句最多多少词、相邻词间最大间隔（秒）、句末标点断句
         MAX_WORDS = 8
-        MAX_GAP_S = 0.8
+        MAX_GAP_S = 0.5
         PUNC_BREAKS = {".", "!", "?", ",", ";", ":", "。", "！", "？", "，", "；", "："}
 
         def flush_group(group):
